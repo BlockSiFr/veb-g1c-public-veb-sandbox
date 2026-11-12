@@ -106,6 +106,11 @@ try {
   const [ruleset, branch, active] = await Promise.all([
     api('/rulesets/27138828'), api('/branches/main'), api('/rules/branches/main?per_page=100'),
   ]);
+  console.log('Native rules read-only status: ruleset=' + ruleset.status +
+    ', branch=' + branch.status + ', applicable=' + active.status +
+    ', active=' + (ruleset.body?.enforcement ?? 'unavailable') +
+    ', bypassActors=' + (Array.isArray(ruleset.body?.bypass_actors) ? ruleset.body.bypass_actors.length : 'unavailable') +
+    ', ruleTypes=' + (Array.isArray(ruleset.body?.rules) ? ruleset.body.rules.map(r=>r.type).join(',') : 'unavailable'));
   requireTest(ruleset.status === 200 && ruleset.body?.enforcement === 'active'
     && ruleset.body?.target === 'branch'
     && Array.isArray(ruleset.body?.bypass_actors)
