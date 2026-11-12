@@ -1,0 +1,30 @@
+name: VEB G1c Native Negative Proof (Synthetic)
+on:
+  push:
+    branches:
+      - probe/g1c-native-negative-20261112
+
+permissions:
+  contents: write
+
+jobs:
+  nonadmin-native-denial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout synthetic probe branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run isolated native-denial test
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/veb-g1c-negative-probe.mjs
+      - name: Preserve non-sensitive provider evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veb-g1c-native-negative-evidence
+          path: veb-native-negative-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
