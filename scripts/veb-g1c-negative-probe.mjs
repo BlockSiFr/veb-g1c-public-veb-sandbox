@@ -28,6 +28,11 @@ const evidence = {
   actorWritePermission: null,
   actorAdminPermission: null,
   actorMaintainPermission: null,
+  unprotectedWriteControl: {
+    status: null,
+    providerRequestId: null,
+    providerCommitSha: null,
+  },
   providerStatus: null,
   providerRequestId: null,
   ruleDenialAttributed: false,
@@ -92,7 +97,9 @@ try {
   evidence.actorWritePermission = perms.push === true;
   evidence.actorAdminPermission = perms.admin === true;
   evidence.actorMaintainPermission = perms.maintain === true;
-  requireTest(evidence.actorWritePermission === true, 'Ephemeral probe lacks repository push permission');
+  // GitHub App installation tokens can report permissions.push=false even when
+  // the Contents:write permission is effective. Prove actual write capability
+  // using a synthetic canary on the unprotected probe branch instead.
   requireTest(evidence.actorAdminPermission === false && evidence.actorMaintainPermission === false,
     'Probe token must not have repository admin or maintainer permission');
 
@@ -125,6 +132,23 @@ try {
   canonical.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   evidence.ruleFingerprint = crypto.createHash('sha256')
     .update(JSON.stringify(canonical)).digest('hex');
+
+  const controlPath = 'veb-probe/actions-positive-control-' + (env.GITHUB_RUN_ID ?? 'unknown') + '.txt';
+  const control = await api('/contents/' + controlPath, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      message: 'test(veb): verify synthetic non-admin write authority on unprotected probe branch',
+      content: Buffer.from('SYNTHETIC unprotected write positive control\\n').toString('base64'),
+      branch: expectedBranch,
+    }),
+  });
+  evidence.unprotectedWriteControl.status = control.status;
+  evidence.unprotectedWriteControl.providerRequestId = control.requestId;
+  evidence.unprotectedWriteControl.providerCommitSha = control.body?.commit?.sha ?? null;
+  requireTest(control.status === 201 && Boolean(control.requestId) &&
+    /^[a-f0-9]{40}$/.test(control.body?.commit?.sha ?? ''),
+    'The ephemeral token could not complete the non-admin unprotected-branch write positive control');
 
   const path = 'veb-probe/actions-synthetic-' + (env.GITHUB_RUN_ID ?? 'unknown') + '.txt';
   const content = Buffer.from('SYNTHETIC BlockSiFr VEB G1c native rule probe\n').toString('base64');
