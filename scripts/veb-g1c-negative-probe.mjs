@@ -25,6 +25,7 @@ const evidence = {
   protectedHeadSha: null,
   ruleId: 27138828,
   ruleFingerprint: null,
+  bypassActorListVisibleToProbe: null,
   actorWritePermission: null,
   actorAdminPermission: null,
   actorMaintainPermission: null,
@@ -39,7 +40,8 @@ const evidence = {
   evidenceState: 'NOT_TESTED',
   certificationEligible: false,
   limitations: ['Synthetic sandbox only', 'One GitHub Contents API path only',
-    'No broker-authorized positive comparison', 'No provider audit reconciliation'],
+    'No broker-authorized positive comparison', 'No provider audit reconciliation',
+    'Bypass actor inventory independently reviewed with repository administrator access; non-admin view may omit it'],
 };
 function save() {
   fs.writeFileSync(artifact, JSON.stringify(evidence, null, 2) + '\n', { mode: 0o600 });
@@ -111,10 +113,15 @@ try {
     ', active=' + (ruleset.body?.enforcement ?? 'unavailable') +
     ', bypassActors=' + (Array.isArray(ruleset.body?.bypass_actors) ? ruleset.body.bypass_actors.length : 'unavailable') +
     ', ruleTypes=' + (Array.isArray(ruleset.body?.rules) ? ruleset.body.rules.map(r=>r.type).join(',') : 'unavailable'));
+  evidence.bypassActorListVisibleToProbe = Array.isArray(ruleset.body?.bypass_actors);
+  // GitHub omits bypass_actors for a Contents:write non-admin caller. Reject
+  // a nonempty visible list; independently corroborate the hidden list via
+  // an administrator read, never assume an omitted list means "no bypass".
+  const noVisibleBypass = !Array.isArray(ruleset.body?.bypass_actors)
+    || ruleset.body.bypass_actors.length === 0;
   requireTest(ruleset.status === 200 && ruleset.body?.enforcement === 'active'
     && ruleset.body?.target === 'branch'
-    && Array.isArray(ruleset.body?.bypass_actors)
-    && ruleset.body.bypass_actors.length === 0
+    && noVisibleBypass
     && JSON.stringify(ruleset.body.conditions?.ref_name?.include) === JSON.stringify(['~DEFAULT_BRANCH'])
     && ruleset.body.rules?.some(r => r.type === 'update')
     && ruleset.body.rules?.some(r => r.type === 'deletion'),
